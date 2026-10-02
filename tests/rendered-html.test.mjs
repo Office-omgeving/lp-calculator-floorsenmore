@@ -23,7 +23,7 @@ test("Netlify can detect every field submitted by the interactive form", async (
   for (const name of names) {
     assert.ok(detectedNames.has(name), `Missing Netlify field: ${name}`);
   }
-  for (const name of ["firstName", "email", "phone", "location", "product", "subfloor", "area", "timing", "estimate", "contactConsent", "privacyConsent"]) {
+  for (const name of ["firstName", "email", "phone", "location", "product", "subfloor", "area", "timing", "estimate"]) {
     assert.ok(names.includes(name), `Missing submission field: ${name}`);
   }
 });

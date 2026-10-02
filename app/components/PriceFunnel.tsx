@@ -293,12 +293,10 @@ export default function PriceFunnel() {
                         <Field label="Telefoon" name="phone" type="tel" placeholder="04xx xx xx xx" />
                       </div>
                       <label className="field field--full"><span>Vertel kort over je project <em>(optioneel)</em></span><textarea name="message" rows={3} placeholder="Nieuwbouw, renovatie, gewenste kleur…" /></label>
-                      <label className="consent"><input type="checkbox" name="contactConsent" value="yes" required /><span><strong>Ja, ik wil gecontacteerd worden voor een exacte offerte</strong> voor mijn project.</span></label>
-                      <label className="consent consent--small"><input type="checkbox" name="privacyConsent" value="yes" required /><span>Ik heb de <a href="https://www.floorsandmore.be/privacy/" target="_blank" rel="noreferrer">privacyverklaring</a> gelezen en ga akkoord met de verwerking van mijn gegevens.</span></label>
                       <input type="hidden" name="estimate" value={priceText} />
                       {submitError && <p role="alert">{submitError}</p>}
                       <button className="submit-button" type="submit" disabled={submitting}>{submitting ? "Aanvraag versturen…" : "Vraag mijn exacte offerte aan"} <span aria-hidden="true">→</span></button>
-                      <small className="form-assurance">Gratis en vrijblijvend · Geen spam · Persoonlijk advies</small>
+                      <small className="form-assurance">Door je aanvraag te versturen, vraag je ons om contact op te nemen voor een offerte. Lees hoe we je gegevens verwerken in onze <a href="https://www.floorsandmore.be/privacy/" target="_blank" rel="noreferrer">privacyverklaring</a>.</small>
                     </form>
                   </div>
                 )}
