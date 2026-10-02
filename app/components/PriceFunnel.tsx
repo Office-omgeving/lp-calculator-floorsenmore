@@ -80,10 +80,6 @@ function PriceValue({ value }: { value: string }) {
   return <strong className="price-value">{value}</strong>;
 }
 
-function CheckIcon() {
-  return <span className="check-icon" aria-hidden="true">✓</span>;
-}
-
 function Field({ label, name, type = "text", placeholder, required = true, autoComplete, inputMode }: { label: string; name: string; type?: string; placeholder?: string; required?: boolean; autoComplete?: string; inputMode?: "text" | "tel" | "email" | "numeric" | "decimal" }) {
   return (
     <label className="field">
@@ -102,6 +98,8 @@ export default function PriceFunnel() {
   const [timing, setTiming] = useState<Timing | "">("");
   const [showQuoteForm, setShowQuoteForm] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   const maxSteps = 5;
   const resultStep = maxSteps;
@@ -123,7 +121,7 @@ export default function PriceFunnel() {
   const back = () => setStep((current) => Math.max(0, current - 1));
   const restart = () => {
     setStep(0); setLocation(""); setProduct(""); setSubfloor(""); setArea("");
-    setTiming(""); setShowQuoteForm(false); setSubmitted(false);
+    setTiming(""); setShowQuoteForm(false); setSubmitted(false); setSubmitError("");
   };
 
   const openQuoteForm = () => {
@@ -133,9 +131,29 @@ export default function PriceFunnel() {
     });
   };
 
-  const submitLead = (event: FormEvent<HTMLFormElement>) => {
+  const submitLead = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setSubmitted(true);
+    if (submitting) return;
+    const data = new FormData(event.currentTarget);
+    const body = new URLSearchParams();
+    data.forEach((value, key) => {
+      if (typeof value === "string") body.append(key, value);
+    });
+    setSubmitting(true);
+    setSubmitError("");
+    try {
+      const response = await fetch("/netlify-forms.html", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: body.toString(),
+      });
+      if (!response.ok) throw new Error("Form submission failed");
+      setSubmitted(true);
+    } catch {
+      setSubmitError("Je aanvraag kon niet worden verstuurd. Probeer het opnieuw; je gegevens blijven ingevuld.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const chooseLocation = (value: string) => {
@@ -213,7 +231,7 @@ export default function PriceFunnel() {
           <p className="step-label">Stap 4</p>
           <h2>Hoeveel m² wil je laten plaatsen?</h2>
           <p>Een goede schatting is voldoende.</p>
-          <label className="area-input"><input autoFocus inputMode="decimal" min="1" max="2000" type="number" value={area} onChange={(event) => setArea(event.target.value)} aria-label="Oppervlakte in vierkante meter" placeholder="80" /><span>m²</span></label>
+          <label className="area-input"><input inputMode="decimal" min="1" max="2000" type="number" value={area} onChange={(event) => setArea(event.target.value)} aria-label="Oppervlakte in vierkante meter" placeholder="80" /><span>m²</span></label>
           <div className="calculator__actions"><button className="back-button" onClick={back}>← Terug</button><button className="primary-button" disabled={!area || Number(area) <= 0} onClick={() => setStep(4)}>Volgende →</button></div>
         </div>
       )}
@@ -259,7 +277,14 @@ export default function PriceFunnel() {
                     <span className="contact-kicker">Offerte op maat</span>
                     <h3>Vul je gegevens in.</h3>
                     <p>Een vloerspecialist bekijkt je aanvraag en neemt persoonlijk contact op voor een exacte offerte.</p>
-                    <form onSubmit={submitLead}>
+                    <form name="offerte-aanvraag" method="POST" action="/netlify-forms.html" data-netlify="true" data-netlify-honeypot="bot-field" onSubmit={submitLead} aria-busy={submitting}>
+                      <input type="hidden" name="form-name" value="offerte-aanvraag" />
+                      <p hidden><label>Laat dit veld leeg: <input name="bot-field" tabIndex={-1} autoComplete="off" /></label></p>
+                      <input type="hidden" name="location" value={location} />
+                      <input type="hidden" name="product" value={products.find((item) => item.key === product)?.label ?? product} />
+                      <input type="hidden" name="subfloor" value={subfloor} />
+                      <input type="hidden" name="area" value={area} />
+                      <input type="hidden" name="timing" value={timings.find((item) => item.key === timing)?.label ?? timing} />
                       <div className="form-grid">
                         <Field label="Voornaam" name="firstName" autoComplete="given-name" />
                         <Field label="Achternaam" name="lastName" autoComplete="family-name" />
@@ -268,10 +293,11 @@ export default function PriceFunnel() {
                         <Field label="Telefoon" name="phone" type="tel" placeholder="04xx xx xx xx" />
                       </div>
                       <label className="field field--full"><span>Vertel kort over je project <em>(optioneel)</em></span><textarea name="message" rows={3} placeholder="Nieuwbouw, renovatie, gewenste kleur…" /></label>
-                      <label className="consent"><input type="checkbox" required /><span><strong>Ja, ik wil gecontacteerd worden voor een exacte offerte</strong> voor mijn project.</span></label>
-                      <label className="consent consent--small"><input type="checkbox" required /><span>Ik heb de <a href="https://www.floorsandmore.be/privacy/" target="_blank" rel="noreferrer">privacyverklaring</a> gelezen en ga akkoord met de verwerking van mijn gegevens.</span></label>
+                      <label className="consent"><input type="checkbox" name="contactConsent" value="yes" required /><span><strong>Ja, ik wil gecontacteerd worden voor een exacte offerte</strong> voor mijn project.</span></label>
+                      <label className="consent consent--small"><input type="checkbox" name="privacyConsent" value="yes" required /><span>Ik heb de <a href="https://www.floorsandmore.be/privacy/" target="_blank" rel="noreferrer">privacyverklaring</a> gelezen en ga akkoord met de verwerking van mijn gegevens.</span></label>
                       <input type="hidden" name="estimate" value={priceText} />
-                      <button className="submit-button" type="submit">Vraag mijn exacte offerte aan <span aria-hidden="true">→</span></button>
+                      {submitError && <p role="alert">{submitError}</p>}
+                      <button className="submit-button" type="submit" disabled={submitting}>{submitting ? "Aanvraag versturen…" : "Vraag mijn exacte offerte aan"} <span aria-hidden="true">→</span></button>
                       <small className="form-assurance">Gratis en vrijblijvend · Geen spam · Persoonlijk advies</small>
                     </form>
                   </div>
@@ -280,10 +306,10 @@ export default function PriceFunnel() {
             ) : (
               <div className="success-card">
                 <span className="success-card__icon" aria-hidden="true">✓</span>
-                <p className="step-label">Aanvraag klaar</p>
+                <p className="step-label">Aanvraag verstuurd</p>
                 <h3>Bedankt voor je interesse.</h3>
-                <p>Dit is het bedankbericht van de funnel. Na koppeling met jullie leadplatform komt de aanvraag rechtstreeks bij het juiste team terecht.</p>
-                <button className="back-button" onClick={() => setSubmitted(false)}>Formulier opnieuw bekijken</button>
+                <p>Je aanvraag is ontvangen. Een vloerspecialist neemt persoonlijk contact met je op om je project te bespreken.</p>
+                <button className="back-button" onClick={restart}>Nieuwe richtprijs berekenen</button>
               </div>
             )}
           </div>
