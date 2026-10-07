@@ -149,6 +149,14 @@ export default function PriceFunnel() {
       });
       if (!response.ok) throw new Error("Form submission failed");
       setSubmitted(true);
+      // Tracking must never turn an accepted submission into a form error.
+      try {
+        const trackingWindow = window as Window & { dataLayer?: Array<Record<string, unknown>> };
+        trackingWindow.dataLayer = trackingWindow.dataLayer || [];
+        trackingWindow.dataLayer.push({ event: "lp_lead_success" });
+      } catch {
+        // Keep the successful form state if a third-party tag fails.
+      }
     } catch {
       setSubmitError("Je aanvraag kon niet worden verstuurd. Probeer het opnieuw; je gegevens blijven ingevuld.");
     } finally {
