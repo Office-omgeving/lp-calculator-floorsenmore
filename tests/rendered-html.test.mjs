@@ -37,3 +37,10 @@ test("contactgegevens zijn verplicht vóór de richtprijs", async () => {
   assert.match(component, /\/\.netlify\/functions\/fm-lead/);
   assert.match(component, /type="checkbox" name="consent" value="ja" required/);
 });
+
+test("lead gaat naar Meta tenzij de bezoeker 'Weigeren' koos", async () => {
+  const component = await readFile(new URL("../app/components/PriceFunnel.tsx", import.meta.url), "utf8");
+  assert.match(component, /const metaConsent = readConsent\(\) !== "denied";/);
+  const notice = await readFile(new URL("../app/components/CookieNotice.tsx", import.meta.url), "utf8");
+  assert.match(notice, /Weiger je, dan delen we niets met Meta/);
+});

@@ -155,7 +155,9 @@ export default function PriceFunnel() {
     const get = (key: string) => (typeof data.get(key) === "string" ? String(data.get(key)).trim() : "");
     const submissionId = newId();
     const eventId = `fm-lp-${submissionId}`;
-    const metaConsent = readConsent() === "granted";
+    // Lead naar Meta (Conversions API) tenzij de bezoeker uitdrukkelijk "Weigeren" koos.
+    // De browserpixel zelf laadt nog steeds alleen na "Accepteren".
+    const metaConsent = readConsent() !== "denied";
 
     setSubmitting(true);
     setSubmitError("");
