@@ -7,7 +7,7 @@
 //                          Instellingen > webhooks > "Kopieer URL" (bevat ?token=…). Dat volstaat.
 //   STRILIO_WEBHOOK_TOKEN  alleen nodig als de URL hierboven geen ?token= bevat
 // Optioneel:
-//   STRILIO_SOURCE_LABEL   standaard "Floors & More - Richtprijs LP"
+//   STRILIO_SOURCE_LABEL   standaard "Meta - Floors & More"
 //   META_CAPI_TOKEN        Conversions API-token van "Pixel van Floors&More" (Events Manager). Zonder token
 //                          wordt alleen de browserpixel gebruikt.
 //   META_TEST_EVENT_CODE   optioneel: code uit Events Manager > Test Events

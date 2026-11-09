@@ -11,20 +11,14 @@ test("Netlify publish directory contains the prerendered landing page", async ()
   assert.doesNotMatch(html, /Your site is taking shape/);
 });
 
-test("Netlify can detect every field submitted by the interactive form", async () => {
-  const html = await readOutput("netlify-forms.html");
+test("leads gaan alleen via de Strilio-webhook, niet via Netlify Forms (Zapier)", async () => {
   const component = await readFile(new URL("../app/components/PriceFunnel.tsx", import.meta.url), "utf8");
-  assert.match(html, /<form[^>]*name="offerte-aanvraag"[^>]*method="POST"[^>]*data-netlify="true"/);
-  assert.match(html, /netlify-honeypot="bot-field"/);
-  assert.match(html, /name="form-name" value="offerte-aanvraag"/);
+  assert.doesNotMatch(component, /netlify-forms|data-netlify/);
+  assert.equal((component.match(/fetch\(/g) || []).length, 1, "precies één verzendroute");
+  assert.match(component, /fetch\("\/\.netlify\/functions\/fm-lead"/);
   const form = component.slice(component.indexOf('<form name="offerte-aanvraag"'), component.indexOf("</form>"));
-  const names = [...form.matchAll(/\bname="([^"]+)"/g)].map((match) => match[1]);
-  const detectedNames = new Set([...html.matchAll(/\bname="([^"]+)"/g)].map((match) => match[1]));
-  for (const name of names) {
-    assert.ok(detectedNames.has(name), `Missing Netlify field: ${name}`);
-  }
-  for (const name of ["firstName", "email", "phone", "location", "product", "subfloor", "area", "timing", "estimate"]) {
-    assert.ok(names.includes(name), `Missing submission field: ${name}`);
+  for (const name of ["firstName", "lastName", "postalCode", "email", "phone", "consent", "bot-field"]) {
+    assert.match(form, new RegExp(`name="${name}"`), `veld ontbreekt: ${name}`);
   }
 });
 

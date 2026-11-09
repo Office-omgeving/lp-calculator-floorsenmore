@@ -30,7 +30,7 @@ export function validateLeadRequest(body) {
   return null;
 }
 
-export function buildStrilioPayload(body, { sourceLabel = 'Floors & More - Richtprijs LP' } = {}) {
+export function buildStrilioPayload(body, { sourceLabel = 'Meta - Floors & More' } = {}) {
   const c = body.contact;
   const k = body.calculator;
   const t = body.tracking && typeof body.tracking === 'object' ? body.tracking : {};
