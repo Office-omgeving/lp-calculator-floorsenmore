@@ -35,7 +35,10 @@ test("contactgegevens zijn verplicht vóór de richtprijs", async () => {
   assert.ok(contactAt > 0 && resultAt > contactAt, "contactstap moet vóór het resultaat staan");
   const resultPanel = component.slice(resultAt);
   assert.match(resultPanel, /PriceValue/);
-  assert.doesNotMatch(component.slice(0, resultAt), /<PriceValue value=/, "richtprijs mag niet vóór het contactformulier zichtbaar zijn");
+  assert.doesNotMatch(component.slice(0, resultAt), /<PriceValue value=\{priceText\}/, "gedetailleerde richtprijs mag niet vóór het contactformulier zichtbaar zijn");
+  const contactPanel = component.slice(contactAt, resultAt);
+  assert.match(contactPanel, /<PriceValue value=\{broadText\}/, "contactstap toont de ruime eerste inschatting");
+  assert.match(resultPanel, /<PriceValue value=\{priceText\}/);
   assert.match(component, /setStep\(resultStep\)/);
   assert.match(component, /\/\.netlify\/functions\/fm-lead/);
   assert.match(component, /type="checkbox" name="consent" value="ja" required/);

@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import CookieNotice from "./CookieNotice";
 import { readConsent, trackLead } from "../lib/pixel";
 import { captureTracking, currentTracking } from "../lib/tracking";
+import { broadRange } from "../lib/broad-range.mjs";
 
 type Timing = "asap" | "1-3m" | "3-6m" | "6m+";
 
@@ -130,6 +131,12 @@ export default function PriceFunnel() {
   }, [area, product]);
 
   const priceText = floorResult?.text ?? "—";
+  // Eerste, ruimere inschatting vóór het contactformulier; de gedetailleerde richtprijs komt erna.
+  const broadText = useMemo(() => {
+    if (!floorResult) return "—";
+    const range = broadRange(floorResult.low, floorResult.high ?? floorResult.low);
+    return `${euro(range.low)} – ${euro(range.high)}`;
+  }, [floorResult]);
   const productLabel = products.find((item) => item.key === product)?.label ?? product;
   const timingLabel = timings.find((item) => item.key === timing)?.label ?? timing;
   const locationLabel = location === "binnen" ? "Binnen" : location === "terras" ? "Terras of wandelpad" : location === "oprit" ? "Oprit" : location;
@@ -292,8 +299,13 @@ export default function PriceFunnel() {
       {step === contactStep && (
         <div className="question-panel quote-form" id="offerteformulier">
           <p className="step-label">Stap {maxSteps}</p>
-          <h2>Je richtprijs staat klaar.</h2>
-          <p>Vul je gegevens in om je richtprijs te bekijken. Een vloerspecialist kan je daarna contacteren voor een exacte offerte.</p>
+          <h2>Je eerste inschatting staat klaar.</h2>
+          <div className="price-result-card price-result-card--broad">
+            <span>Eerste inschatting</span>
+            <PriceValue value={broadText} />
+            <small>Ruime vork · {productLabel} · {area} m²</small>
+          </div>
+          <p>Vul je gegevens in voor je gedetailleerde richtprijs. Een vloerspecialist kan je daarna contacteren voor een exacte offerte.</p>
           <form name="offerte-aanvraag" method="POST" action="/netlify-forms.html" data-netlify="true" data-netlify-honeypot="bot-field" onSubmit={submitLead} aria-busy={submitting}>
             <input type="hidden" name="form-name" value="offerte-aanvraag" />
             <p hidden><label>Laat dit veld leeg: <input name="bot-field" tabIndex={-1} autoComplete="off" /></label></p>
@@ -315,7 +327,7 @@ export default function PriceFunnel() {
             {submitError && <p className="lead-error" role="alert">{submitError}</p>}
             <div className="calculator__actions">
               <button className="back-button" type="button" onClick={back}>← Terug</button>
-              <button className="submit-button" type="submit" disabled={submitting}>{submitting ? "Even geduld…" : "Toon mijn richtprijs"} <span aria-hidden="true">→</span></button>
+              <button className="submit-button" type="submit" disabled={submitting}>{submitting ? "Even geduld…" : "Toon mijn gedetailleerde richtprijs"} <span aria-hidden="true">→</span></button>
             </div>
           </form>
         </div>
@@ -325,9 +337,9 @@ export default function PriceFunnel() {
         <div className="result-panel" aria-live="polite">
           <div className="lead-panel" id="offerte">
             <div className="price-result-card">
-              <span>Jouw richtprijs</span>
+              <span>Jouw gedetailleerde richtprijs</span>
               <PriceValue value={priceText} />
-              <small>Indicatieve prijs · {productLabel} · {area} m²</small>
+              <small>{floorResult?.detail ?? "Indicatieve prijs"} · {productLabel}</small>
             </div>
             <div className="success-card">
               <span className="success-card__icon" aria-hidden="true">✓</span>
