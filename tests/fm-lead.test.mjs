@@ -29,6 +29,7 @@ test("payload heeft Floors & More-tags, geen calculator-tag, en UTM op hoofdnive
   assert.deepEqual(p.opportunity_tags, p.contact_tags);
   assert.ok(!p.contact_tags.includes("calculator") && !p.contact_tags.includes("abbi"));
   assert.equal(p.provider, "floorsandmore");
+  assert.equal(p.source_label, "Meta - Floors & More");
   assert.equal(p.utm_source, "facebook");
   assert.equal(p.utm_campaign, "fm-gietvloer");
   assert.equal(p.fbclid, "abc");
