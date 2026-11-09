@@ -160,8 +160,9 @@ export default function PriceFunnel() {
     setSubmitting(true);
     setSubmitError("");
 
-    // 1) Strilio (via Netlify-functie) + Meta Conversions API.
-    const leadRequest = fetch("/.netlify/functions/fm-lead", {
+    // Enige route: Strilio-webhook (via Netlify-functie fm-lead), daarna Meta Conversions API.
+    // Bewust geen Netlify Forms meer: die voedde een Zapier-koppeling naar Strilio (dubbele leads zonder tags/UTM).
+    const toStrilio = await fetch("/.netlify/functions/fm-lead", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -182,18 +183,8 @@ export default function PriceFunnel() {
       }),
     }).then((r) => r.ok).catch(() => false);
 
-    // 2) Netlify Forms als reservekopie (e-mailmelding blijft werken, ook als Strilio onbereikbaar is).
-    const formBody = new URLSearchParams();
-    data.forEach((value, key) => { if (typeof value === "string") formBody.append(key, value); });
-    const backupRequest = fetch("/netlify-forms.html", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: formBody.toString(),
-    }).then((r) => r.ok).catch(() => false);
-
-    const [toStrilio, toBackup] = await Promise.all([leadRequest, backupRequest]);
     setSubmitting(false);
-    if (!toStrilio && !toBackup) {
+    if (!toStrilio) {
       setSubmitError("Je gegevens konden niet worden verstuurd. Probeer het opnieuw; alles blijft ingevuld.");
       return;
     }
@@ -306,8 +297,7 @@ export default function PriceFunnel() {
             <small>Ruime vork · {productLabel} · {area} m²</small>
           </div>
           <p>Vul je gegevens in voor je gedetailleerde richtprijs. Een vloerspecialist kan je daarna contacteren voor een exacte offerte.</p>
-          <form name="offerte-aanvraag" method="POST" action="/netlify-forms.html" data-netlify="true" data-netlify-honeypot="bot-field" onSubmit={submitLead} aria-busy={submitting}>
-            <input type="hidden" name="form-name" value="offerte-aanvraag" />
+          <form name="offerte-aanvraag" onSubmit={submitLead} aria-busy={submitting}>
             <p hidden><label>Laat dit veld leeg: <input name="bot-field" tabIndex={-1} autoComplete="off" /></label></p>
             <input type="hidden" name="location" value={location} />
             <input type="hidden" name="product" value={productLabel} />
