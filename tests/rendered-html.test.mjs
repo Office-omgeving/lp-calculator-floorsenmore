@@ -27,3 +27,16 @@ test("Netlify can detect every field submitted by the interactive form", async (
     assert.ok(names.includes(name), `Missing submission field: ${name}`);
   }
 });
+
+test("contactgegevens zijn verplicht vóór de richtprijs", async () => {
+  const component = await readFile(new URL("../app/components/PriceFunnel.tsx", import.meta.url), "utf8");
+  const contactAt = component.indexOf("{step === contactStep && (");
+  const resultAt = component.indexOf("{step === resultStep && (");
+  assert.ok(contactAt > 0 && resultAt > contactAt, "contactstap moet vóór het resultaat staan");
+  const resultPanel = component.slice(resultAt);
+  assert.match(resultPanel, /PriceValue/);
+  assert.doesNotMatch(component.slice(0, resultAt), /<PriceValue value=/, "richtprijs mag niet vóór het contactformulier zichtbaar zijn");
+  assert.match(component, /setStep\(resultStep\)/);
+  assert.match(component, /\/\.netlify\/functions\/fm-lead/);
+  assert.match(component, /type="checkbox" name="consent" value="ja" required/);
+});

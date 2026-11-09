@@ -262,3 +262,12 @@ a { color: inherit; }
   html { scroll-behavior: auto; }
   *, *::before, *::after { transition-duration: .01ms !important; }
 }
+
+/* Cookiemelding (Meta-pixel pas na toestemming) */
+.cookie-notice { position: fixed; inset: auto 0 0 0; z-index: 50; padding: 16px; }
+.cookie-notice__box { max-width: 640px; margin: 0 auto; padding: 18px; border: 1px solid #d8d9d8; border-radius: 12px; background: white; box-shadow: 0 12px 40px rgba(0, 0, 0, .18); color: var(--ink); font-size: 14px; line-height: 1.5; }
+.cookie-notice__box a { color: var(--accent-dark); }
+.cookie-notice__actions { margin-top: 12px; display: flex; justify-content: flex-end; gap: 10px; }
+.cookie-notice__actions .primary-button { flex: 0 0 auto; }
+.lead-error { margin-top: 14px; color: #b42318; font-size: 14px; }
+.lead-panel .success-card { min-height: 0; margin-top: 24px; }
