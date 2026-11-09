@@ -1,6 +1,9 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import CookieNotice from "./CookieNotice";
+import { readConsent, trackLead } from "../lib/pixel";
+import { captureTracking, currentTracking } from "../lib/tracking";
 
 type Timing = "asap" | "1-3m" | "3-6m" | "6m+";
 
@@ -80,14 +83,21 @@ function PriceValue({ value }: { value: string }) {
   return <strong className="price-value">{value}</strong>;
 }
 
-function Field({ label, name, type = "text", placeholder, required = true, autoComplete, inputMode }: { label: string; name: string; type?: string; placeholder?: string; required?: boolean; autoComplete?: string; inputMode?: "text" | "tel" | "email" | "numeric" | "decimal" }) {
+function Field({ label, name, type = "text", placeholder, required = true, autoComplete, inputMode, pattern, title }: { label: string; name: string; type?: string; placeholder?: string; required?: boolean; autoComplete?: string; inputMode?: "text" | "tel" | "email" | "numeric" | "decimal"; pattern?: string; title?: string }) {
   return (
     <label className="field">
       <span>{label}{required && " *"}</span>
-      <input name={name} type={type} placeholder={placeholder} required={required} autoComplete={autoComplete} inputMode={inputMode} />
+      <input name={name} type={type} placeholder={placeholder} required={required} autoComplete={autoComplete} inputMode={inputMode} pattern={pattern} title={title} />
     </label>
   );
 }
+
+const CONSENT_TEXT = "Ik ga akkoord dat Floors & More mij contacteert over mijn aanvraag en mijn gegevens verwerkt volgens de privacyverklaring.";
+
+const newId = () => {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+};
 
 export default function PriceFunnel() {
   const [step, setStep] = useState(0);
@@ -96,64 +106,93 @@ export default function PriceFunnel() {
   const [subfloor, setSubfloor] = useState("");
   const [area, setArea] = useState("");
   const [timing, setTiming] = useState<Timing | "">("");
-  const [showQuoteForm, setShowQuoteForm] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
-  const maxSteps = 5;
+  // Eerst contactgegevens, dan pas de richtprijs: stap 6 is het contactformulier, daarna het resultaat.
+  const maxSteps = 6;
+  const contactStep = 5;
   const resultStep = maxSteps;
   const filteredProducts = products.filter((item) => item.location === location);
+
+  // UTM-parameters en fbclid van de advertentieklik bewaren voor de lead.
+  useEffect(() => { captureTracking(); }, []);
 
   const floorResult = useMemo(() => {
     const sqm = Number(area);
     if (!product || !sqm) return null;
     const band = floorPrices[product]?.find((item) => sqm >= item.min && (item.max === null || sqm < item.max));
     if (!band) return null;
-    if (band.start) return { text: `vanaf ${euro(band.start)}`, detail: "vaste startprijs voor kleine projecten" };
+    if (band.start) return { text: `vanaf ${euro(band.start)}`, detail: "vaste startprijs voor kleine projecten", low: band.start, high: null as number | null };
     const low = Math.round((band.low ?? 0) * sqm);
     const high = Math.round((band.high ?? 0) * sqm);
-    return { text: low === high ? euro(low) : `${euro(low)} – ${euro(high)}`, detail: `${euro(band.low ?? 0)} – ${euro(band.high ?? 0)} per m² × ${sqm} m²` };
+    return { text: low === high ? euro(low) : `${euro(low)} – ${euro(high)}`, detail: `${euro(band.low ?? 0)} – ${euro(band.high ?? 0)} per m² × ${sqm} m²`, low, high: high as number | null };
   }, [area, product]);
 
   const priceText = floorResult?.text ?? "—";
+  const productLabel = products.find((item) => item.key === product)?.label ?? product;
+  const timingLabel = timings.find((item) => item.key === timing)?.label ?? timing;
+  const locationLabel = location === "binnen" ? "Binnen" : location === "terras" ? "Terras of wandelpad" : location === "oprit" ? "Oprit" : location;
 
   const back = () => setStep((current) => Math.max(0, current - 1));
   const restart = () => {
     setStep(0); setLocation(""); setProduct(""); setSubfloor(""); setArea("");
-    setTiming(""); setShowQuoteForm(false); setSubmitted(false); setSubmitError("");
-  };
-
-  const openQuoteForm = () => {
-    setShowQuoteForm(true);
-    requestAnimationFrame(() => {
-      document.getElementById("offerteformulier")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
+    setTiming(""); setSubmitError("");
   };
 
   const submitLead = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (submitting) return;
-    const data = new FormData(event.currentTarget);
-    const body = new URLSearchParams();
-    data.forEach((value, key) => {
-      if (typeof value === "string") body.append(key, value);
-    });
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const get = (key: string) => (typeof data.get(key) === "string" ? String(data.get(key)).trim() : "");
+    const submissionId = newId();
+    const eventId = `fm-lp-${submissionId}`;
+    const metaConsent = readConsent() === "granted";
+
     setSubmitting(true);
     setSubmitError("");
-    try {
-      const response = await fetch("/netlify-forms.html", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: body.toString(),
-      });
-      if (!response.ok) throw new Error("Form submission failed");
-      setSubmitted(true);
-    } catch {
-      setSubmitError("Je aanvraag kon niet worden verstuurd. Probeer het opnieuw; je gegevens blijven ingevuld.");
-    } finally {
-      setSubmitting(false);
+
+    // 1) Strilio (via Netlify-functie) + Meta Conversions API.
+    const leadRequest = fetch("/.netlify/functions/fm-lead", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        submissionId,
+        eventId,
+        website: get("bot-field"),
+        contact: {
+          firstName: get("firstName"), lastName: get("lastName"), email: get("email"), phone: get("phone"),
+          postalCode: get("postalCode"), message: get("message"), consent: data.get("consent") === "ja",
+        },
+        calculator: {
+          location, locationLabel, product, productLabel, subfloor, area, timing, timingLabel,
+          priceText, priceLow: floorResult?.low ?? null, priceHigh: floorResult?.high ?? null,
+        },
+        tracking: currentTracking(),
+        consentText: CONSENT_TEXT,
+        metaConsent,
+      }),
+    }).then((r) => r.ok).catch(() => false);
+
+    // 2) Netlify Forms als reservekopie (e-mailmelding blijft werken, ook als Strilio onbereikbaar is).
+    const formBody = new URLSearchParams();
+    data.forEach((value, key) => { if (typeof value === "string") formBody.append(key, value); });
+    const backupRequest = fetch("/netlify-forms.html", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: formBody.toString(),
+    }).then((r) => r.ok).catch(() => false);
+
+    const [toStrilio, toBackup] = await Promise.all([leadRequest, backupRequest]);
+    setSubmitting(false);
+    if (!toStrilio && !toBackup) {
+      setSubmitError("Je gegevens konden niet worden verstuurd. Probeer het opnieuw; alles blijft ingevuld.");
+      return;
     }
+    trackLead(eventId, { content_name: "Floors & More richtprijs gietvloer", content_category: productLabel, value: floorResult?.low ?? null });
+    setStep(resultStep);
+    requestAnimationFrame(() => document.getElementById("calculator")?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
 
   const chooseLocation = (value: string) => {
@@ -165,6 +204,7 @@ export default function PriceFunnel() {
 
   return (
     <section className="calculator" id="calculator" aria-labelledby="calculator-title">
+      <CookieNotice />
       <div className="calculator__topline">
         <span className="calculator__kicker">Vrijblijvende prijsindicatie</span>
         {step < resultStep && <span className="calculator__count">{step + 1} / {maxSteps}</span>}
@@ -174,7 +214,6 @@ export default function PriceFunnel() {
           <span style={{ width: `${((step + 1) / maxSteps) * 100}%` }} />
         </div>
       )}
-
       {step === 0 && (
         <div className="question-panel">
           <p className="step-label">Stap 1</p>
@@ -238,7 +277,7 @@ export default function PriceFunnel() {
 
       {step === 4 && (
         <div className="question-panel">
-          <p className="step-label">Stap {maxSteps}</p>
+          <p className="step-label">Stap 5</p>
           <h2>Wanneer wil je starten?</h2>
           <p>Zo kunnen we je aanvraag meteen juist inschatten.</p>
           <div className="option-grid option-grid--timing">
@@ -246,70 +285,57 @@ export default function PriceFunnel() {
               <button className={`option option--compact ${timing === item.key ? "is-selected" : ""}`} key={item.key} onClick={() => setTiming(item.key)} aria-pressed={timing === item.key}><strong>{item.label}</strong></button>
             ))}
           </div>
-          <div className="calculator__actions"><button className="back-button" onClick={back}>← Terug</button><button className="primary-button" disabled={!timing} onClick={() => setStep(resultStep)}>Bekijk mijn richtprijs →</button></div>
+          <div className="calculator__actions"><button className="back-button" onClick={back}>← Terug</button><button className="primary-button" disabled={!timing} onClick={() => setStep(contactStep)}>Volgende →</button></div>
+        </div>
+      )}
+
+      {step === contactStep && (
+        <div className="question-panel quote-form" id="offerteformulier">
+          <p className="step-label">Stap {maxSteps}</p>
+          <h2>Je richtprijs staat klaar.</h2>
+          <p>Vul je gegevens in om je richtprijs te bekijken. Een vloerspecialist kan je daarna contacteren voor een exacte offerte.</p>
+          <form name="offerte-aanvraag" method="POST" action="/netlify-forms.html" data-netlify="true" data-netlify-honeypot="bot-field" onSubmit={submitLead} aria-busy={submitting}>
+            <input type="hidden" name="form-name" value="offerte-aanvraag" />
+            <p hidden><label>Laat dit veld leeg: <input name="bot-field" tabIndex={-1} autoComplete="off" /></label></p>
+            <input type="hidden" name="location" value={location} />
+            <input type="hidden" name="product" value={productLabel} />
+            <input type="hidden" name="subfloor" value={subfloor} />
+            <input type="hidden" name="area" value={area} />
+            <input type="hidden" name="timing" value={timingLabel} />
+            <div className="form-grid">
+              <Field label="Voornaam" name="firstName" autoComplete="given-name" />
+              <Field label="Achternaam" name="lastName" autoComplete="family-name" />
+              <Field label="Postcode" name="postalCode" inputMode="numeric" placeholder="2800" pattern="\d{4}" title="Vier cijfers, bv. 2800" autoComplete="postal-code" />
+              <Field label="E-mail" name="email" type="email" placeholder="naam@voorbeeld.be" autoComplete="email" />
+              <Field label="Telefoon" name="phone" type="tel" placeholder="04xx xx xx xx" autoComplete="tel" />
+            </div>
+            <label className="field field--full"><span>Vertel kort over je project <em>(optioneel)</em></span><textarea name="message" rows={3} placeholder="Nieuwbouw, renovatie, gewenste kleur…" /></label>
+            <input type="hidden" name="estimate" value={priceText} />
+            <label className="consent"><input type="checkbox" name="consent" value="ja" required /><span>Ik ga akkoord dat Floors &amp; More mij contacteert over mijn aanvraag en mijn gegevens verwerkt volgens de <a href="https://www.floorsandmore.be/privacy/" target="_blank" rel="noreferrer">privacyverklaring</a>. *</span></label>
+            {submitError && <p className="lead-error" role="alert">{submitError}</p>}
+            <div className="calculator__actions">
+              <button className="back-button" type="button" onClick={back}>← Terug</button>
+              <button className="submit-button" type="submit" disabled={submitting}>{submitting ? "Even geduld…" : "Toon mijn richtprijs"} <span aria-hidden="true">→</span></button>
+            </div>
+          </form>
         </div>
       )}
 
       {step === resultStep && (
         <div className="result-panel" aria-live="polite">
           <div className="lead-panel" id="offerte">
-            {!submitted ? (
-              <>
-                <div className="price-result-card">
-                  <span>Jouw richtprijs</span>
-                  <PriceValue value={priceText} />
-                  <small>Indicatieve prijs · gratis en vrijblijvend berekend</small>
-                </div>
-
-                {!showQuoteForm ? (
-                  <div className="quote-choice">
-                    <span className="contact-kicker">Wil je een exacte prijs?</span>
-                    <h3>Vraag vrijblijvend een offerte op maat aan.</h3>
-                    <p>Een specialist bekijkt je project en neemt contact met je op. Alleen als jij dat wilt.</p>
-                    <button className="quote-choice__button" type="button" onClick={openQuoteForm}>
-                      Ja, ik wil een offerte op maat <span aria-hidden="true">→</span>
-                    </button>
-                    <small className="quote-choice__note">Liever niet? Geen probleem — je richtprijs staat hierboven.</small>
-                    <button className="edit-link" type="button" onClick={restart}>Richtprijs opnieuw berekenen</button>
-                  </div>
-                ) : (
-                  <div className="quote-form" id="offerteformulier">
-                    <span className="contact-kicker">Offerte op maat</span>
-                    <h3>Vul je gegevens in.</h3>
-                    <p>Een vloerspecialist bekijkt je aanvraag en neemt persoonlijk contact op voor een exacte offerte.</p>
-                    <form name="offerte-aanvraag" method="POST" action="/netlify-forms.html" data-netlify="true" data-netlify-honeypot="bot-field" onSubmit={submitLead} aria-busy={submitting}>
-                      <input type="hidden" name="form-name" value="offerte-aanvraag" />
-                      <p hidden><label>Laat dit veld leeg: <input name="bot-field" tabIndex={-1} autoComplete="off" /></label></p>
-                      <input type="hidden" name="location" value={location} />
-                      <input type="hidden" name="product" value={products.find((item) => item.key === product)?.label ?? product} />
-                      <input type="hidden" name="subfloor" value={subfloor} />
-                      <input type="hidden" name="area" value={area} />
-                      <input type="hidden" name="timing" value={timings.find((item) => item.key === timing)?.label ?? timing} />
-                      <div className="form-grid">
-                        <Field label="Voornaam" name="firstName" autoComplete="given-name" />
-                        <Field label="Achternaam" name="lastName" autoComplete="family-name" />
-                        <Field label="Postcode" name="postalCode" inputMode="numeric" placeholder="2800" />
-                        <Field label="E-mail" name="email" type="email" placeholder="naam@voorbeeld.be" />
-                        <Field label="Telefoon" name="phone" type="tel" placeholder="04xx xx xx xx" />
-                      </div>
-                      <label className="field field--full"><span>Vertel kort over je project <em>(optioneel)</em></span><textarea name="message" rows={3} placeholder="Nieuwbouw, renovatie, gewenste kleur…" /></label>
-                      <input type="hidden" name="estimate" value={priceText} />
-                      {submitError && <p role="alert">{submitError}</p>}
-                      <button className="submit-button" type="submit" disabled={submitting}>{submitting ? "Aanvraag versturen…" : "Vraag mijn exacte offerte aan"} <span aria-hidden="true">→</span></button>
-                      <small className="form-assurance">Door je aanvraag te versturen, vraag je ons om contact op te nemen voor een offerte. Lees hoe we je gegevens verwerken in onze <a href="https://www.floorsandmore.be/privacy/" target="_blank" rel="noreferrer">privacyverklaring</a>.</small>
-                    </form>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="success-card">
-                <span className="success-card__icon" aria-hidden="true">✓</span>
-                <p className="step-label">Aanvraag verstuurd</p>
-                <h3>Bedankt voor je interesse.</h3>
-                <p>Je aanvraag is ontvangen. Een vloerspecialist neemt persoonlijk contact met je op om je project te bespreken.</p>
-                <button className="back-button" onClick={restart}>Nieuwe richtprijs berekenen</button>
-              </div>
-            )}
+            <div className="price-result-card">
+              <span>Jouw richtprijs</span>
+              <PriceValue value={priceText} />
+              <small>Indicatieve prijs · {productLabel} · {area} m²</small>
+            </div>
+            <div className="success-card">
+              <span className="success-card__icon" aria-hidden="true">✓</span>
+              <p className="step-label">Aanvraag ontvangen</p>
+              <h3>Bedankt, we nemen contact met je op.</h3>
+              <p>Een vloerspecialist bekijkt je project en neemt persoonlijk contact op voor een exacte offerte.</p>
+              <button className="edit-link" type="button" onClick={restart}>Nieuwe richtprijs berekenen</button>
+            </div>
           </div>
         </div>
       )}
