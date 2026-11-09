@@ -1,6 +1,6 @@
 // Meta Conversions API (server-side) voor het Lead-event van de calculator.
 // - Zelfde event_id als de browserpixel (fbq ... {eventID}) -> Meta ontdubbelt automatisch.
-// - Alleen als de bezoeker cookies/tracking accepteerde (metaConsent === true).
+// - Alleen als metaConsent === true: de browser zet dat op true tenzij de bezoeker "Weigeren" koos.
 // - Persoonsgegevens worden SHA-256 gehasht volgens Meta's normalisatieregels.
 // Omgevingsvariabelen: META_CAPI_TOKEN (verplicht om te versturen), META_PIXEL_ID (standaard
 // 2474496069532591 = "Pixel van Floors&More"), META_TEST_EVENT_CODE (optioneel, voor Test Events).

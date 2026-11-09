@@ -21,7 +21,7 @@ export default function CookieNotice() {
     <div className="cookie-notice" role="dialog" aria-label="Cookies">
       <div className="cookie-notice__box">
         <p>
-          We gebruiken cookies van Meta om te meten welke advertenties werken. Dat gebeurt alleen als je dat toelaat.{" "}
+          We meten met Meta welke advertenties werken: met cookies als je ze accepteert, en bij een aanvraag geven we die versleuteld door aan Meta. Weiger je, dan delen we niets met Meta.{" "}
           <a href="https://www.floorsandmore.be/privacy/" target="_blank" rel="noreferrer">Privacyverklaring</a>
         </p>
         <div className="cookie-notice__actions">
