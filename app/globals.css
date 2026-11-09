@@ -271,3 +271,4 @@ a { color: inherit; }
 .cookie-notice__actions .primary-button { flex: 0 0 auto; }
 .lead-error { margin-top: 14px; color: #b42318; font-size: 14px; }
 .lead-panel .success-card { min-height: 0; margin-top: 24px; }
+.price-result-card--broad { margin: 18px 0 20px; padding: 24px 8px 22px; border-radius: 10px; }
